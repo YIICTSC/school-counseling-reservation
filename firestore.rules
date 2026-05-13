@@ -59,11 +59,12 @@ service cloud.firestore {
     }
 
     function isValidAppointment(data) {
-      return hasOnlyAllowedFields(['counselorId', 'parentId', 'parentName', 'studentName', 'phoneNumber', 'date', 'startTime', 'endTime', 'status', 'notes', 'createdAt']) &&
+      return hasOnlyAllowedFields(['counselorId', 'parentId', 'parentName', 'studentName', 'parentEmail', 'phoneNumber', 'date', 'startTime', 'endTime', 'status', 'notes', 'createdAt']) &&
              isValidString(data.counselorId, 1, 100) &&
              isValidString(data.parentId, 0, 100) &&
              isValidString(data.parentName, 1, 100) &&
              isValidString(data.studentName, 1, 100) &&
+             isValidEmail(data.parentEmail) &&
              (!('phoneNumber' in data) || isValidString(data.phoneNumber, 9, 15)) &&
              isValidString(data.date, 10, 10) && // YYYY-MM-DD
              isValidString(data.startTime, 5, 5) && // HH:MM
@@ -106,6 +107,11 @@ service cloud.firestore {
         resource.data.status in ['pending', 'confirmed']
       );
       allow delete: if isAdmin();
+    }
+
+    match /mail/{mailId} {
+      allow create: if isAdmin();
+      allow read, update, delete: if false;
     }
   }
 }
