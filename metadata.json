@@ -1,0 +1,6 @@
+{
+  "name": "School Counseling Reservation",
+  "description": "学校のスクールカウンセラーやスクールソーシャルワーカーの予約システム。保護者向け予約ページと管理者向けページを含む。",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

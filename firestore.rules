@@ -1,0 +1,111 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isConfiguredAdmin() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/settings/general) &&
+             request.auth.token.email in get(/databases/$(database)/documents/settings/general).data.adminEmails;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+         (request.auth.token.email == "yishigeict@gmail.com" && request.auth.token.email_verified == true) ||
+         isConfiguredAdmin());
+    }
+
+    function hasOnlyAllowedFields(allowedFields) {
+      return request.resource.data.keys().hasOnly(allowedFields);
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data, userId) {
+      return hasOnlyAllowedFields(['uid', 'email', 'role', 'displayName']) &&
+             data.uid == userId &&
+             isValidEmail(data.email) &&
+             data.role in ['parent', 'admin'] &&
+             (!('displayName' in data) || isValidString(data.displayName, 1, 100));
+    }
+
+    function isValidCounselor(data) {
+      return hasOnlyAllowedFields(['name', 'type', 'description', 'isActive']) &&
+             isValidString(data.name, 1, 100) &&
+             data.type in ['counselor', 'social_worker'] &&
+             (!('description' in data) || isValidString(data.description, 0, 1000)) &&
+             data.isActive is bool;
+    }
+
+    function isValidAppointment(data) {
+      return hasOnlyAllowedFields(['counselorId', 'parentId', 'parentName', 'studentName', 'phoneNumber', 'date', 'startTime', 'endTime', 'status', 'notes', 'createdAt']) &&
+             isValidString(data.counselorId, 1, 100) &&
+             isValidString(data.parentId, 0, 100) &&
+             isValidString(data.parentName, 1, 100) &&
+             isValidString(data.studentName, 1, 100) &&
+             (!('phoneNumber' in data) || isValidString(data.phoneNumber, 9, 15)) &&
+             isValidString(data.date, 10, 10) && // YYYY-MM-DD
+             isValidString(data.startTime, 5, 5) && // HH:MM
+             isValidString(data.endTime, 5, 5) && // HH:MM
+             data.status in ['pending', 'confirmed', 'cancelled'] &&
+             (!('notes' in data) || isValidString(data.notes, 0, 1000)) &&
+             data.createdAt is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /settings/{document} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data, userId) && 
+                    ((isOwner(userId) && request.resource.data.role == 'parent') || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data, userId) && 
+                    ((isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin());
+    }
+
+    match /counselors/{counselorId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidCounselor(request.resource.data);
+      allow update: if isAdmin() && isValidCounselor(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /appointments/{appointmentId} {
+      allow read: if true;
+      allow create: if isValidAppointment(request.resource.data) && request.resource.data.status == 'pending';
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+        request.resource.data.status == 'cancelled' &&
+        resource.data.status in ['pending', 'confirmed']
+      );
+      allow delete: if isAdmin();
+    }
+  }
+}

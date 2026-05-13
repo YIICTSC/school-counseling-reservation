@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the system, either a parent or an admin.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "role": { "type": "string", "enum": ["parent", "admin"], "description": "User role" },
+        "displayName": { "type": "string", "description": "User's display name" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Counselor": {
+      "title": "Counselor",
+      "description": "A school counselor or social worker.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the counselor" },
+        "type": { "type": "string", "enum": ["counselor", "social_worker"], "description": "Type of professional" },
+        "description": { "type": "string", "description": "Brief description or profile" },
+        "isActive": { "type": "boolean", "description": "Whether the counselor is currently active" }
+      },
+      "required": ["name", "type", "isActive"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "A booking made by a parent with a counselor.",
+      "type": "object",
+      "properties": {
+        "counselorId": { "type": "string", "description": "ID of the counselor" },
+        "parentId": { "type": "string", "description": "ID of the parent (User UID)" },
+        "parentName": { "type": "string", "description": "Name of the parent" },
+        "studentName": { "type": "string", "description": "Name of the student" },
+        "date": { "type": "string", "description": "Date of the appointment (YYYY-MM-DD)" },
+        "startTime": { "type": "string", "description": "Start time (HH:MM)" },
+        "endTime": { "type": "string", "description": "End time (HH:MM)" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled"], "description": "Status of the appointment" },
+        "notes": { "type": "string", "description": "Additional notes from the parent" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["counselorId", "parentId", "parentName", "studentName", "date", "startTime", "endTime", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles"
+    },
+    "/counselors/{counselorId}": {
+      "schema": { "$ref": "#/entities/Counselor" },
+      "description": "Counselor profiles"
+    },
+    "/appointments/{appointmentId}": {
+      "schema": { "$ref": "#/entities/Appointment" },
+      "description": "Appointments"
+    }
+  }
+}
