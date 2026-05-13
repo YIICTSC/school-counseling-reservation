@@ -31,3 +31,20 @@ This project includes a GitHub Actions workflow that builds the Vite app and dep
 For `https://github.com/YIICTSC/school-counseling-reservation`, the site URL will be:
 
 `https://yiictsc.github.io/school-counseling-reservation/`
+
+## Email Notifications
+
+When an admin approves an appointment, the app creates a document in the Firestore `mail` collection. To send the email automatically, install the Firebase **Trigger Email** extension and configure it to watch the `mail` collection.
+
+The extension should use documents shaped like:
+
+```json
+{
+  "to": ["parent@example.com"],
+  "message": {
+    "subject": "面談予約が承認されました",
+    "text": "メール本文",
+    "html": "メール本文"
+  }
+}
+```
