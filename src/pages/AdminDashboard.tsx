@@ -12,6 +12,7 @@ interface Appointment {
   parentId: string;
   parentName: string;
   studentName: string;
+  parentEmail?: string;
   phoneNumber?: string;
   date: string;
   startTime: string;
@@ -131,9 +132,40 @@ export const AdminDashboard = () => {
     };
   };
 
+  const sendApprovalEmail = async (appointment: Appointment) => {
+    const formattedDate = format(new Date(appointment.date), 'yyyy年MM月dd日 (E)', { locale: ja });
+    const counselorName = getCounselorName(appointment.counselorId);
+    const subject = `面談予約が承認されました: ${formattedDate} ${appointment.startTime}-${appointment.endTime}`;
+    const text = `${appointment.parentName} 様
+
+面談予約が承認されました。
+
+対象児童・生徒: ${appointment.studentName}
+担当者: ${counselorName}
+日時: ${formattedDate} ${appointment.startTime}-${appointment.endTime}
+
+当日は予約時間にお越しください。
+`;
+
+    await addDoc(collection(db, 'mail'), {
+      to: [appointment.parentEmail],
+      message: {
+        subject,
+        text,
+        html: text.replace(/\n/g, '<br />'),
+      },
+      appointmentId: appointment.id,
+      createdAt: new Date().toISOString(),
+    });
+  };
+
   const handleUpdateStatus = async (id: string, newStatus: 'confirmed' | 'cancelled') => {
     try {
       await updateDoc(doc(db, 'appointments', id), { status: newStatus });
+      const appointment = appointments.find(apt => apt.id === id);
+      if (newStatus === 'confirmed' && appointment?.parentEmail) {
+        await sendApprovalEmail(appointment);
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `appointments/${id}`);
     }
@@ -290,6 +322,7 @@ export const AdminDashboard = () => {
                       <div>
                         <p className="text-sm text-gray-500">保護者氏名 / 対象児童・生徒</p>
                         <p className="text-sm font-medium text-gray-900">{apt.parentName} / {apt.studentName}</p>
+                        {apt.parentEmail && <p className="text-sm text-gray-500 mt-1">✉ {apt.parentEmail}</p>}
                         {apt.phoneNumber && <p className="text-sm text-gray-500 mt-1">📞 {apt.phoneNumber}</p>}
                       </div>
                       {apt.notes && (
