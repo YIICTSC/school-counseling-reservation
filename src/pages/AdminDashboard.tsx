@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, addDoc, setDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { Calendar, Users, CheckCircle, XCircle, Trash2, Plus, Settings, Save, X } from 'lucide-react';
+import { Bell, Calendar, Users, CheckCircle, XCircle, Trash2, Plus, Settings, Save, X } from 'lucide-react';
 import { useSettings, SystemSettings, ExceptionalDate } from '../hooks/useSettings';
 
 interface Appointment {
@@ -36,6 +36,10 @@ export const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [deletingCounselorId, setDeletingCounselorId] = useState<string | null>(null);
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<string | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
+    typeof Notification === 'undefined' ? 'default' : Notification.permission
+  );
+  const hasLoadedInitialAppointments = useRef(false);
 
   // Settings State
   const { settings, loading: settingsLoading } = useSettings();
@@ -62,6 +66,19 @@ export const AdminDashboard = () => {
     const qAppointments = query(collection(db, 'appointments'));
     const unsubAppointments = onSnapshot(qAppointments, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Appointment[];
+      const addedAppointments = snapshot
+        .docChanges()
+        .filter(change => change.type === 'added')
+        .map(change => ({ id: change.doc.id, ...change.doc.data() }) as Appointment);
+
+      if (hasLoadedInitialAppointments.current) {
+        addedAppointments
+          .filter(apt => apt.status === 'pending')
+          .forEach(showAppointmentNotification);
+      } else {
+        hasLoadedInitialAppointments.current = true;
+      }
+
       // Sort by date and time
       docs.sort((a, b) => {
         const dateCompare = b.date.localeCompare(a.date);
@@ -87,6 +104,32 @@ export const AdminDashboard = () => {
       unsubCounselors();
     };
   }, []);
+
+  const isNotificationSupported = typeof Notification !== 'undefined';
+
+  const handleEnableNotifications = async () => {
+    if (!isNotificationSupported) return;
+
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+  };
+
+  const showAppointmentNotification = (appointment: Appointment) => {
+    if (!isNotificationSupported || Notification.permission !== 'granted') return;
+
+    const formattedDate = format(new Date(appointment.date), 'yyyy年MM月dd日 (E)', { locale: ja });
+    const notification = new Notification('新しい予約リクエストがあります', {
+      body: `${appointment.parentName} / ${appointment.studentName}\n${formattedDate} ${appointment.startTime}-${appointment.endTime}`,
+      tag: `appointment-${appointment.id}`,
+      requireInteraction: true,
+    });
+
+    notification.onclick = () => {
+      window.focus();
+      setActiveTab('appointments');
+      notification.close();
+    };
+  };
 
   const handleUpdateStatus = async (id: string, newStatus: 'confirmed' | 'cancelled') => {
     try {
@@ -161,7 +204,23 @@ export const AdminDashboard = () => {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">管理者ダッシュボード</h1>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">管理者ダッシュボード</h1>
+          {isNotificationSupported && notificationPermission !== 'granted' && (
+            <button
+              onClick={handleEnableNotifications}
+              className="inline-flex items-center justify-center px-4 py-2 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <Bell className="w-4 h-4 mr-2" />
+              新規予約の通知を有効にする
+            </button>
+          )}
+          {isNotificationSupported && notificationPermission === 'denied' && (
+            <p className="text-sm text-red-600">
+              ブラウザで通知がブロックされています。サイト設定から通知を許可してください。
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="mb-6 border-b border-gray-200">
