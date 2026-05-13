@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType } from '../firebase';
+import { auth, db } from '../firebase';
 
 export interface UserProfile {
   uid: string;
@@ -14,12 +14,14 @@ interface AuthContextType {
   user: FirebaseUser | null;
   profile: UserProfile | null;
   loading: boolean;
+  authError: string | null;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   profile: null,
   loading: true,
+  authError: null,
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -28,6 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -35,10 +38,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (firebaseUser) {
         try {
+          setAuthError(null);
           // Check settings for admin emails
           const settingsDoc = await getDoc(doc(db, 'settings', 'general'));
-          const adminEmails = settingsDoc.exists() ? settingsDoc.data().adminEmails || ['yishigeict@gmail.com'] : ['yishigeict@gmail.com'];
-          const isAdmin = adminEmails.includes(firebaseUser.email);
+          const adminEmails = settingsDoc.exists()
+            ? settingsDoc.data().adminEmails || ['yishigeict@gmail.com']
+            : ['yishigeict@gmail.com'];
+          const normalizedUserEmail = firebaseUser.email?.toLowerCase() || '';
+          const isAdmin = adminEmails
+            .map((email: string) => email.toLowerCase())
+            .includes(normalizedUserEmail);
 
           const userDocRef = doc(db, 'users', firebaseUser.uid);
           const userDoc = await getDoc(userDocRef);
@@ -64,10 +73,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setProfile(newProfile);
           }
         } catch (error) {
-          handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
+          console.error('Failed to load user profile:', error);
+          setProfile(null);
+          setAuthError(
+            'ログインは完了しましたが、ユーザー情報を読み込めませんでした。Firestoreの権限設定または管理者メール設定を確認してください。',
+          );
         }
       } else {
         setProfile(null);
+        setAuthError(null);
       }
       
       setLoading(false);
@@ -77,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading }}>
+    <AuthContext.Provider value={{ user, profile, loading, authError }}>
       {children}
     </AuthContext.Provider>
   );
