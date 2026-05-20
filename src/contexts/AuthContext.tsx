@@ -51,22 +51,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           const userDocRef = doc(db, 'users', firebaseUser.uid);
           const userDoc = await getDoc(userDocRef);
+          const currentRole = isAdmin ? 'admin' : 'parent';
           
           if (userDoc.exists()) {
             const data = userDoc.data() as UserProfile;
-            // Update role if admin status changed
-            if (isAdmin && data.role !== 'admin') {
-              await setDoc(userDocRef, { ...data, role: 'admin' }, { merge: true });
-              setProfile({ ...data, role: 'admin' });
-            } else {
-              setProfile(data);
+            const updatedProfile = { ...data, role: currentRole };
+            setProfile(updatedProfile);
+
+            if (data.role !== currentRole) {
+              setDoc(userDocRef, { role: currentRole }, { merge: true }).catch((error) => {
+                console.warn('Failed to sync user role:', error);
+              });
             }
           } else {
             // Create new user profile
             const newProfile: UserProfile = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
-              role: isAdmin ? 'admin' : 'parent',
+              role: currentRole,
               displayName: firebaseUser.displayName || '名無し',
             };
             await setDoc(userDocRef, newProfile);
