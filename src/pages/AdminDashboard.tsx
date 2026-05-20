@@ -6,6 +6,16 @@ import { ja } from 'date-fns/locale';
 import { Bell, Calendar, Users, CheckCircle, XCircle, Trash2, Plus, Settings, Save, X } from 'lucide-react';
 import { useSettings, SystemSettings } from '../hooks/useSettings';
 
+interface TimeSlot {
+  start: string;
+  end: string;
+}
+
+interface WeeklyAvailability {
+  dayOfWeek: number;
+  timeSlots: TimeSlot[];
+}
+
 interface Appointment {
   id: string;
   counselorId: string;
@@ -27,7 +37,124 @@ interface Counselor {
   type: 'counselor' | 'social_worker';
   description?: string;
   isActive: boolean;
+  weeklyAvailability?: WeeklyAvailability[];
 }
+
+const weekDays = ['日', '月', '火', '水', '木', '金', '土'];
+
+const createDefaultWeeklyAvailability = (allowedDaysOfWeek: number[], timeSlots: TimeSlot[]): WeeklyAvailability[] =>
+  allowedDaysOfWeek.map(dayOfWeek => ({
+    dayOfWeek,
+    timeSlots: timeSlots.map(slot => ({ ...slot })),
+  }));
+
+const normalizeWeeklyAvailability = (availability: WeeklyAvailability[]) =>
+  availability
+    .filter(day => day.timeSlots.length > 0)
+    .map(day => ({
+      dayOfWeek: day.dayOfWeek,
+      timeSlots: day.timeSlots.filter(slot => slot.start && slot.end),
+    }))
+    .filter(day => day.timeSlots.length > 0)
+    .sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+
+const ScheduleEditor = ({
+  value,
+  onChange,
+}: {
+  value: WeeklyAvailability[];
+  onChange: (nextValue: WeeklyAvailability[]) => void;
+}) => {
+  const getDay = (dayOfWeek: number) => value.find(day => day.dayOfWeek === dayOfWeek);
+
+  const updateDay = (dayOfWeek: number, updater: (day: WeeklyAvailability) => WeeklyAvailability | null) => {
+    const existing = getDay(dayOfWeek);
+    const nextDay = updater(existing || { dayOfWeek, timeSlots: [{ start: '09:00', end: '10:00' }] });
+    const others = value.filter(day => day.dayOfWeek !== dayOfWeek);
+    onChange(normalizeWeeklyAvailability(nextDay ? [...others, nextDay] : others));
+  };
+
+  return (
+    <div className="space-y-3">
+      {weekDays.map((dayLabel, dayOfWeek) => {
+        const day = getDay(dayOfWeek);
+        const enabled = Boolean(day);
+
+        return (
+          <div key={dayOfWeek} className="border border-gray-200 rounded-lg p-3">
+            <label className="inline-flex items-center">
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={() => updateDay(dayOfWeek, current => enabled ? null : current)}
+                className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              />
+              <span className="ml-2 text-sm font-medium text-gray-800">{dayLabel}曜日</span>
+            </label>
+
+            {enabled && day && (
+              <div className="mt-3 space-y-2">
+                {day.timeSlots.map((slot, slotIndex) => (
+                  <div key={slotIndex} className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="time"
+                      value={slot.start}
+                      onChange={e => {
+                        updateDay(dayOfWeek, current => {
+                          const timeSlots = [...current.timeSlots];
+                          timeSlots[slotIndex] = { ...timeSlots[slotIndex], start: e.target.value };
+                          return { ...current, timeSlots };
+                        });
+                      }}
+                      className="border border-gray-300 rounded-md shadow-sm py-1.5 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    <span className="text-gray-500">-</span>
+                    <input
+                      type="time"
+                      value={slot.end}
+                      onChange={e => {
+                        updateDay(dayOfWeek, current => {
+                          const timeSlots = [...current.timeSlots];
+                          timeSlots[slotIndex] = { ...timeSlots[slotIndex], end: e.target.value };
+                          return { ...current, timeSlots };
+                        });
+                      }}
+                      className="border border-gray-300 rounded-md shadow-sm py-1.5 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateDay(dayOfWeek, current => {
+                          const timeSlots = current.timeSlots.filter((_, index) => index !== slotIndex);
+                          return timeSlots.length > 0 ? { ...current, timeSlots } : null;
+                        });
+                      }}
+                      className="text-red-500 hover:text-red-700 p-1"
+                      aria-label={`${dayLabel}曜日の時間枠を削除`}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => updateDay(dayOfWeek, current => ({
+                    ...current,
+                    timeSlots: [...current.timeSlots, { start: '09:00', end: '10:00' }],
+                  }))}
+                  className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  時間枠を追加
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 export const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState<'appointments' | 'counselors' | 'settings'>('appointments');
@@ -36,6 +163,8 @@ export const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [deletingCounselorId, setDeletingCounselorId] = useState<string | null>(null);
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<string | null>(null);
+  const [editingCounselorId, setEditingCounselorId] = useState<string | null>(null);
+  const [editingCounselor, setEditingCounselor] = useState<Omit<Counselor, 'id'> | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
     typeof Notification === 'undefined' ? 'default' : Notification.permission
   );
@@ -45,12 +174,12 @@ export const AdminDashboard = () => {
   const [formData, setFormData] = useState<SystemSettings>(settings);
   const [savingSettings, setSavingSettings] = useState(false);
   const [adminEmailsInput, setAdminEmailsInput] = useState('');
-
   const [newCounselor, setNewCounselor] = useState({
     name: '',
     type: 'counselor' as 'counselor' | 'social_worker',
     description: '',
-    isActive: true
+    isActive: true,
+    weeklyAvailability: createDefaultWeeklyAvailability(settings.allowedDaysOfWeek, settings.timeSlots),
   });
 
   useEffect(() => {
@@ -147,10 +276,47 @@ export const AdminDashboard = () => {
   const handleAddCounselor = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await addDoc(collection(db, 'counselors'), newCounselor);
-      setNewCounselor({ name: '', type: 'counselor', description: '', isActive: true });
+      await addDoc(collection(db, 'counselors'), {
+        ...newCounselor,
+        weeklyAvailability: normalizeWeeklyAvailability(newCounselor.weeklyAvailability),
+      });
+      setNewCounselor({
+        name: '',
+        type: 'counselor',
+        description: '',
+        isActive: true,
+        weeklyAvailability: createDefaultWeeklyAvailability(settings.allowedDaysOfWeek, settings.timeSlots),
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'counselors');
+    }
+  };
+
+  const handleStartEditCounselor = (counselor: Counselor) => {
+    setEditingCounselorId(counselor.id);
+    setEditingCounselor({
+      name: counselor.name,
+      type: counselor.type,
+      description: counselor.description || '',
+      isActive: counselor.isActive,
+      weeklyAvailability: counselor.weeklyAvailability?.length
+        ? counselor.weeklyAvailability
+        : createDefaultWeeklyAvailability(settings.allowedDaysOfWeek, settings.timeSlots),
+    });
+  };
+
+  const handleSaveCounselor = async () => {
+    if (!editingCounselorId || !editingCounselor) return;
+
+    try {
+      await updateDoc(doc(db, 'counselors', editingCounselorId), {
+        ...editingCounselor,
+        weeklyAvailability: normalizeWeeklyAvailability(editingCounselor.weeklyAvailability || []),
+      });
+      setEditingCounselorId(null);
+      setEditingCounselor(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `counselors/${editingCounselorId}`);
     }
   };
 
@@ -166,7 +332,14 @@ export const AdminDashboard = () => {
   const handleSaveSettings = async () => {
     setSavingSettings(true);
     try {
-      await setDoc(doc(db, 'settings', 'general'), formData);
+      const adminEmails = adminEmailsInput
+        .split('\n')
+        .map(email => email.trim().toLowerCase())
+        .filter(Boolean);
+      const settingsToSave = { ...formData, adminEmails };
+
+      await setDoc(doc(db, 'settings', 'general'), settingsToSave);
+      setFormData(settingsToSave);
       alert('設定を保存しました');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'settings/general');
@@ -370,6 +543,13 @@ export const AdminDashboard = () => {
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">予約可能な曜日・時間</label>
+                <ScheduleEditor
+                  value={newCounselor.weeklyAvailability}
+                  onChange={weeklyAvailability => setNewCounselor({ ...newCounselor, weeklyAvailability })}
+                />
+              </div>
               <div className="flex justify-end">
                 <button
                   type="submit"
@@ -384,38 +564,127 @@ export const AdminDashboard = () => {
 
           <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
             <ul className="divide-y divide-gray-200">
-              {counselors.map((counselor) => (
-                <li key={counselor.id} className="p-6 flex items-center justify-between hover:bg-gray-50">
-                  <div>
-                    <div className="flex items-center space-x-3">
-                      <h3 className="text-sm font-medium text-gray-900">{counselor.name}</h3>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {counselor.type === 'counselor' ? 'スクールカウンセラー' : 'スクールソーシャルワーカー'}
-                      </span>
-                    </div>
-                    {counselor.description && (
-                      <p className="mt-2 text-sm text-gray-500">{counselor.description}</p>
-                    )}
-                  </div>
-                  <div className="ml-4">
-                    {deletingCounselorId === counselor.id ? (
-                      <div className="flex items-center space-x-2 bg-red-50 p-2 rounded-lg border border-red-100">
-                        <span className="text-xs text-red-600 font-bold">削除しますか？</span>
-                        <button onClick={() => handleDeleteCounselor(counselor.id)} className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded transition">はい</button>
-                        <button onClick={() => setDeletingCounselorId(null)} className="text-xs bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded transition">キャンセル</button>
+              {counselors.map((counselor) => {
+                const isEditing = editingCounselorId === counselor.id && editingCounselor;
+                const availability = counselor.weeklyAvailability || [];
+
+                return (
+                  <li key={counselor.id} className="p-6 hover:bg-gray-50">
+                    {isEditing ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">氏名</label>
+                            <input
+                              type="text"
+                              value={editingCounselor.name}
+                              onChange={e => setEditingCounselor({ ...editingCounselor, name: e.target.value })}
+                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">職種</label>
+                            <select
+                              value={editingCounselor.type}
+                              onChange={e => setEditingCounselor({ ...editingCounselor, type: e.target.value as 'counselor' | 'social_worker' })}
+                              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                            >
+                              <option value="counselor">スクールカウンセラー</option>
+                              <option value="social_worker">スクールソーシャルワーカー</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">紹介文・備考 (任意)</label>
+                          <textarea
+                            rows={2}
+                            value={editingCounselor.description || ''}
+                            onChange={e => setEditingCounselor({ ...editingCounselor, description: e.target.value })}
+                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">予約可能な曜日・時間</label>
+                          <ScheduleEditor
+                            value={editingCounselor.weeklyAvailability || []}
+                            onChange={weeklyAvailability => setEditingCounselor({ ...editingCounselor, weeklyAvailability })}
+                          />
+                        </div>
+                        <div className="flex justify-end space-x-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingCounselorId(null);
+                              setEditingCounselor(null);
+                            }}
+                            className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                          >
+                            キャンセル
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveCounselor}
+                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+                          >
+                            <Save className="w-4 h-4 mr-2" />
+                            保存
+                          </button>
+                        </div>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => setDeletingCounselorId(counselor.id)}
-                        className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition"
-                        title="削除"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="flex items-center space-x-3">
+                            <h3 className="text-sm font-medium text-gray-900">{counselor.name}</h3>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {counselor.type === 'counselor' ? 'スクールカウンセラー' : 'スクールソーシャルワーカー'}
+                            </span>
+                          </div>
+                          {counselor.description && (
+                            <p className="mt-2 text-sm text-gray-500">{counselor.description}</p>
+                          )}
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {availability.length > 0 ? (
+                              availability.map(day => (
+                                <span key={day.dayOfWeek} className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-700">
+                                  {weekDays[day.dayOfWeek]} {day.timeSlots.map(slot => `${slot.start}-${slot.end}`).join(', ')}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-gray-500">全体の予約ルールを使用</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {deletingCounselorId === counselor.id ? (
+                            <div className="flex items-center space-x-2 bg-red-50 p-2 rounded-lg border border-red-100">
+                              <span className="text-xs text-red-600 font-bold">削除しますか？</span>
+                              <button onClick={() => handleDeleteCounselor(counselor.id)} className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded transition">はい</button>
+                              <button onClick={() => setDeletingCounselorId(null)} className="text-xs bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded transition">キャンセル</button>
+                            </div>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => handleStartEditCounselor(counselor)}
+                                className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                              >
+                                編集
+                              </button>
+                              <button
+                                onClick={() => setDeletingCounselorId(counselor.id)}
+                                className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition"
+                                title="削除"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     )}
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
               {counselors.length === 0 && (
                 <li className="p-8 text-center text-gray-500">
                   登録されている担当者はいません
@@ -469,8 +738,14 @@ export const AdminDashboard = () => {
                     <textarea
                       rows={3}
                       value={adminEmailsInput}
-                      onChange={e => setAdminEmailsInput(e.target.value)}
-                      onBlur={() => setFormData({ ...formData, adminEmails: adminEmailsInput.split('\n').map(s => s.trim()).filter(Boolean) })}
+                      onChange={e => {
+                        const value = e.target.value;
+                        setAdminEmailsInput(value);
+                        setFormData({
+                          ...formData,
+                          adminEmails: value.split('\n').map(s => s.trim().toLowerCase()).filter(Boolean)
+                        });
+                      }}
                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
                     />
                   </div>
@@ -512,7 +787,7 @@ export const AdminDashboard = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">予約可能曜日</label>
                     <div className="flex flex-wrap gap-4">
-                      {['日', '月', '火', '水', '木', '金', '土'].map((day, index) => (
+                      {weekDays.map((day, index) => (
                         <label key={index} className="inline-flex items-center">
                           <input
                             type="checkbox"
