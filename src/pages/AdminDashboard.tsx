@@ -4,7 +4,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Bell, Calendar, Users, CheckCircle, XCircle, Trash2, Plus, Settings, Save, X } from 'lucide-react';
-import { useSettings, SystemSettings } from '../hooks/useSettings';
+import { useSettings, SystemSettings, ExceptionalDate } from '../hooks/useSettings';
 
 interface TimeSlot {
   start: string;
@@ -38,6 +38,7 @@ interface Counselor {
   description?: string;
   isActive: boolean;
   weeklyAvailability?: WeeklyAvailability[];
+  exceptionalDates?: ExceptionalDate[];
 }
 
 const weekDays = ['日', '月', '火', '水', '木', '金', '土'];
@@ -60,6 +61,22 @@ const normalizeWeeklyAvailability = (availability: WeeklyAvailability[]) =>
     }))
     .filter(day => day.timeSlots.length > 0)
     .sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+
+const copySchoolWeeklyAvailability = (settings: SystemSettings) =>
+  createDefaultWeeklyAvailability(settings.allowedDaysOfWeek, settings.timeSlots);
+
+const copySchoolExceptionalDates = (settings: SystemSettings) =>
+  settings.exceptionalDates.map(exception => ({ ...exception }));
+
+const normalizeExceptionalDates = (exceptionalDates: ExceptionalDate[]) =>
+  exceptionalDates
+    .filter(exception => exception.date)
+    .map(exception => ({
+      date: exception.date,
+      type: exception.type,
+      ...(exception.type === 'open' && exception.timeSlotsStr ? { timeSlotsStr: exception.timeSlotsStr } : {}),
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 
 const ScheduleEditor = ({
   value,
@@ -163,6 +180,68 @@ const ScheduleEditor = ({
   );
 };
 
+const ExceptionalDatesEditor = ({
+  value,
+  onChange,
+}: {
+  value: ExceptionalDate[];
+  onChange: (nextValue: ExceptionalDate[]) => void;
+}) => {
+  const updateException = (index: number, nextException: ExceptionalDate) => {
+    const nextValue = [...value];
+    nextValue[index] = nextException;
+    onChange(nextValue);
+  };
+
+  return (
+    <div className="space-y-3">
+      {value.map((exception, index) => (
+        <div key={index} className="flex flex-col gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:flex-row sm:items-start">
+          <input
+            type="date"
+            value={exception.date}
+            onChange={e => updateException(index, { ...exception, date: e.target.value })}
+            className="border border-gray-300 rounded-md shadow-sm py-1.5 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+          />
+          <select
+            value={exception.type}
+            onChange={e => updateException(index, { ...exception, type: e.target.value as 'open' | 'closed' })}
+            className="border border-gray-300 rounded-md shadow-sm py-1.5 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+          >
+            <option value="closed">休業日</option>
+            <option value="open">特別対応日</option>
+          </select>
+          {exception.type === 'open' && (
+            <input
+              type="text"
+              placeholder="例: 09:00-10:00, 13:00-14:00"
+              value={exception.timeSlotsStr || ''}
+              onChange={e => updateException(index, { ...exception, timeSlotsStr: e.target.value })}
+              className="flex-1 border border-gray-300 rounded-md shadow-sm py-1.5 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => onChange(value.filter((_, currentIndex) => currentIndex !== index))}
+            className="text-red-500 hover:text-red-700 p-1.5"
+            aria-label="例外日程を削除"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => onChange([...value, { date: format(new Date(), 'yyyy-MM-dd'), type: 'closed' }])}
+        className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800"
+      >
+        <Plus className="w-4 h-4 mr-1" />
+        例外日程を追加
+      </button>
+    </div>
+  );
+};
+
 export const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState<'appointments' | 'counselors' | 'settings'>('appointments');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -198,7 +277,8 @@ export const AdminDashboard = () => {
     type: 'counselor' as 'counselor' | 'social_worker',
     description: '',
     isActive: true,
-    weeklyAvailability: createDefaultWeeklyAvailability(settings.allowedDaysOfWeek, settings.timeSlots),
+    weeklyAvailability: copySchoolWeeklyAvailability(settings),
+    exceptionalDates: copySchoolExceptionalDates(settings),
   });
 
   useEffect(() => {
@@ -296,13 +376,15 @@ export const AdminDashboard = () => {
       await addDoc(collection(db, 'counselors'), {
         ...newCounselor,
         weeklyAvailability: normalizeWeeklyAvailability(newCounselor.weeklyAvailability),
+        exceptionalDates: normalizeExceptionalDates(newCounselor.exceptionalDates),
       });
       setNewCounselor({
         name: '',
         type: 'counselor',
         description: '',
         isActive: true,
-        weeklyAvailability: createDefaultWeeklyAvailability(settings.allowedDaysOfWeek, settings.timeSlots),
+        weeklyAvailability: copySchoolWeeklyAvailability(settings),
+        exceptionalDates: copySchoolExceptionalDates(settings),
       });
     } catch (error) {
       try {
@@ -325,7 +407,8 @@ export const AdminDashboard = () => {
       isActive: counselor.isActive,
       weeklyAvailability: counselor.weeklyAvailability?.length
         ? counselor.weeklyAvailability
-        : createDefaultWeeklyAvailability(settings.allowedDaysOfWeek, settings.timeSlots),
+        : copySchoolWeeklyAvailability(settings),
+      exceptionalDates: counselor.exceptionalDates?.length ? counselor.exceptionalDates : [],
     });
   };
 
@@ -336,6 +419,7 @@ export const AdminDashboard = () => {
       await updateDoc(doc(db, 'counselors', editingCounselorId), {
         ...editingCounselor,
         weeklyAvailability: normalizeWeeklyAvailability(editingCounselor.weeklyAvailability || []),
+        exceptionalDates: normalizeExceptionalDates(editingCounselor.exceptionalDates || []),
       });
       setEditingCounselorId(null);
       setEditingCounselor(null);
@@ -580,10 +664,30 @@ export const AdminDashboard = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">予約可能な曜日・時間</label>
+                <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <label className="block text-sm font-medium text-gray-700">予約可能な曜日・時間</label>
+                  <button
+                    type="button"
+                    onClick={() => setNewCounselor({
+                      ...newCounselor,
+                      weeklyAvailability: copySchoolWeeklyAvailability(settings),
+                      exceptionalDates: copySchoolExceptionalDates(settings),
+                    })}
+                    className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    学校側日程にあわせる
+                  </button>
+                </div>
                 <ScheduleEditor
                   value={newCounselor.weeklyAvailability}
                   onChange={weeklyAvailability => setNewCounselor({ ...newCounselor, weeklyAvailability })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">担当者ごとの例外日程</label>
+                <ExceptionalDatesEditor
+                  value={newCounselor.exceptionalDates}
+                  onChange={exceptionalDates => setNewCounselor({ ...newCounselor, exceptionalDates })}
                 />
               </div>
               {counselorFormError && (
@@ -652,6 +756,13 @@ export const AdminDashboard = () => {
                             onChange={weeklyAvailability => setEditingCounselor({ ...editingCounselor, weeklyAvailability })}
                           />
                         </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">担当者ごとの例外日程</label>
+                          <ExceptionalDatesEditor
+                            value={editingCounselor.exceptionalDates || []}
+                            onChange={exceptionalDates => setEditingCounselor({ ...editingCounselor, exceptionalDates })}
+                          />
+                        </div>
                         <div className="flex justify-end space-x-3">
                           <button
                             type="button"
@@ -696,6 +807,15 @@ export const AdminDashboard = () => {
                               <span className="text-xs text-gray-500">全体の予約ルールを使用</span>
                             )}
                           </div>
+                          {counselor.exceptionalDates && counselor.exceptionalDates.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {counselor.exceptionalDates.map(exception => (
+                                <span key={`${exception.date}-${exception.type}`} className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs text-amber-800">
+                                  {exception.date} {exception.type === 'closed' ? '休業' : `特別 ${exception.timeSlotsStr || ''}`}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center space-x-2">
                           {deletingCounselorId === counselor.id ? (

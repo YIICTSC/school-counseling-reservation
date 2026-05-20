@@ -4,7 +4,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { format, addDays, startOfToday } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { CheckCircle } from 'lucide-react';
-import { useSettings } from '../hooks/useSettings';
+import { useSettings, ExceptionalDate } from '../hooks/useSettings';
 
 interface TimeSlot {
   start: string;
@@ -23,6 +23,7 @@ interface Counselor {
   description?: string;
   isActive: boolean;
   weeklyAvailability?: WeeklyAvailability[];
+  exceptionalDates?: ExceptionalDate[];
 }
 
 export const BookAppointment = () => {
@@ -93,7 +94,9 @@ export const BookAppointment = () => {
     if (!dateStr) return [];
 
     const targetDate = new Date(dateStr);
-    const exception = settings.exceptionalDates?.find(ex => ex.date === dateStr);
+    const counselorException = selectedCounselorData?.exceptionalDates?.find(ex => ex.date === dateStr);
+    const schoolException = settings.exceptionalDates?.find(ex => ex.date === dateStr);
+    const exception = counselorException || schoolException;
 
     if (exception?.type === 'closed') return [];
     if (exception?.type === 'open' && exception.timeSlotsStr) {
