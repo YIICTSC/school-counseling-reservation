@@ -214,37 +214,37 @@ export const BookAppointment = () => {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="flex space-x-4 mb-8 border-b border-gray-200 pb-4">
+      <div className="grid grid-cols-2 gap-2 mb-8 border-b border-gray-200 pb-4 sm:flex sm:space-x-4 sm:gap-0">
         <button
           onClick={() => setViewMode('book')}
-          className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${viewMode === 'book' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'}`}
+          className={`px-3 py-2 rounded-lg font-medium text-sm transition-colors sm:px-4 ${viewMode === 'book' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'}`}
         >
           新規予約
         </button>
         <button
           onClick={() => setViewMode('check')}
-          className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${viewMode === 'check' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'}`}
+          className={`px-3 py-2 rounded-lg font-medium text-sm leading-snug transition-colors sm:px-4 ${viewMode === 'check' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'}`}
         >
           予約の確認・キャンセル
         </button>
       </div>
 
       {viewMode === 'check' ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm sm:p-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">予約の確認・キャンセル</h2>
-          <form onSubmit={handleSearch} className="flex space-x-3 mb-6">
+          <form onSubmit={handleSearch} className="flex flex-col gap-3 mb-6 sm:flex-row">
             <input
               type="tel"
               required
               value={searchPhone}
               onChange={e => setSearchPhone(e.target.value)}
               placeholder="予約時の電話番号 (例: 09012345678)"
-              className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 sm:flex-1 sm:text-sm"
             />
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="inline-flex w-full justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 sm:w-auto"
             >
               {loading ? '検索中...' : '検索'}
             </button>
@@ -256,29 +256,29 @@ export const BookAppointment = () => {
                 <p className="text-gray-500 text-center py-4">予約が見つかりませんでした。</p>
               ) : (
                 myAppointments.map(apt => (
-                  <div key={apt.id} className="border border-gray-200 rounded-lg p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div>
-                      <div className="flex items-center space-x-2 mb-1">
-                        <span className="font-medium text-gray-900">{format(new Date(apt.date), 'yyyy年MM月dd日 (E)', { locale: ja })}</span>
-                        <span className="text-gray-600">{apt.startTime} - {apt.endTime}</span>
+                  <div key={apt.id} className="border border-gray-200 rounded-lg p-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <span className="w-full font-medium text-gray-900 sm:w-auto">{format(new Date(apt.date), 'yyyy年MM月dd日 (E)', { locale: ja })}</span>
+                        <span className="text-sm text-gray-600 sm:text-base">{apt.startTime} - {apt.endTime}</span>
                         {apt.status === 'pending' && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">承認待ち</span>}
                         {apt.status === 'confirmed' && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">予約確定</span>}
                         {apt.status === 'cancelled' && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">キャンセル済</span>}
                       </div>
                       <p className="text-sm text-gray-500">対象: {apt.studentName} / 担当: {counselors.find(c => c.id === apt.counselorId)?.name || '不明'}</p>
                     </div>
-                    <div>
+                    <div className="w-full sm:w-auto">
                       {apt.status !== 'cancelled' && (
                         cancelConfirmId === apt.id ? (
-                          <div className="flex items-center space-x-2 bg-red-50 p-2 rounded-lg border border-red-100">
-                            <span className="text-xs text-red-600 font-bold">キャンセルしますか？</span>
+                          <div className="grid grid-cols-2 gap-2 bg-red-50 p-2 rounded-lg border border-red-100 sm:flex sm:items-center">
+                            <span className="col-span-2 text-xs text-red-600 font-bold sm:col-auto">キャンセルしますか？</span>
                             <button onClick={() => confirmCancel(apt.id)} className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded transition">はい</button>
                             <button onClick={() => setCancelConfirmId(null)} className="text-xs bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded transition">戻る</button>
                           </div>
                         ) : (
                           <button
                             onClick={() => setCancelConfirmId(apt.id)}
-                            className="text-sm text-red-600 hover:text-red-800 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg transition"
+                            className="w-full text-sm text-red-600 hover:text-red-800 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg transition sm:w-auto sm:py-1.5"
                           >
                             キャンセル
                           </button>
