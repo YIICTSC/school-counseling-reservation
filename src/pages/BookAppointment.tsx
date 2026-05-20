@@ -188,7 +188,7 @@ export const BookAppointment = () => {
         <CheckCircle className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-gray-900 mb-2">予約リクエストを送信しました</h2>
         <p className="text-gray-600 mb-8">
-          担当者が内容を確認し、承認いたします。<br />
+          担当者が内容を確認し、日程があわない場合のみ連絡致します。<br />
           ご不明な点がある場合は、学校までお問い合わせください。
         </p>
         <button
