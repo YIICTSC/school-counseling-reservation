@@ -355,6 +355,10 @@ export const AdminDashboard = () => {
   };
 
   const showPendingAppointmentsNotification = (pendingAppointments: Appointment[]) => {
+    if (pendingAppointments.length > 0 && 'vibrate' in navigator) {
+      navigator.vibrate([160, 80, 160]);
+    }
+
     if (!isNotificationSupported || Notification.permission !== 'granted' || pendingAppointments.length === 0) return;
 
     const previewAppointments = pendingAppointments.slice(0, 3);
@@ -529,12 +533,14 @@ export const AdminDashboard = () => {
       </div>
 
       {pendingLoginNoticeCount > 0 && (
-        <div className="mb-6 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3">
+        <div className="sticky top-2 z-20 mb-6 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-4 shadow-lg sm:static sm:shadow-none">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
-              <Bell className="mt-0.5 h-5 w-5 text-yellow-600" />
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-yellow-100 sm:h-auto sm:w-auto sm:bg-transparent">
+                <Bell className="h-5 w-5 text-yellow-700" />
+              </div>
               <div>
-                <p className="text-sm font-medium text-yellow-900">
+                <p className="text-base font-bold text-yellow-950 sm:text-sm sm:font-medium sm:text-yellow-900">
                   未確認の予約リクエストが{pendingLoginNoticeCount}件あります
                 </p>
                 <p className="mt-1 text-sm text-yellow-800">
@@ -542,21 +548,21 @@ export const AdminDashboard = () => {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2 sm:justify-end">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
               <button
                 type="button"
                 onClick={() => {
                   setActiveTab('appointments');
                   setPendingLoginNoticeCount(0);
                 }}
-                className="rounded-md bg-yellow-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-yellow-700"
+                className="rounded-md bg-yellow-600 px-3 py-2 text-sm font-medium text-white hover:bg-yellow-700 sm:py-1.5"
               >
                 予約を確認
               </button>
               <button
                 type="button"
                 onClick={() => setPendingLoginNoticeCount(0)}
-                className="rounded-md border border-yellow-300 bg-white px-3 py-1.5 text-sm font-medium text-yellow-800 hover:bg-yellow-100"
+                className="rounded-md border border-yellow-300 bg-white px-3 py-2 text-sm font-medium text-yellow-800 hover:bg-yellow-100 sm:py-1.5"
               >
                 閉じる
               </button>
