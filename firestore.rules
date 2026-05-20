@@ -55,11 +55,12 @@ service cloud.firestore {
     }
 
     function isValidCounselor(data) {
-      return hasOnlyAllowedFields(['name', 'type', 'description', 'isActive']) &&
+      return hasOnlyAllowedFields(['name', 'type', 'description', 'isActive', 'weeklyAvailability']) &&
              isValidString(data.name, 1, 100) &&
              data.type in ['counselor', 'social_worker'] &&
              (!('description' in data) || isValidString(data.description, 0, 1000)) &&
-             data.isActive is bool;
+             data.isActive is bool &&
+             (!('weeklyAvailability' in data) || (data.weeklyAvailability is list && data.weeklyAvailability.size() <= 7));
     }
 
     function isValidAppointment(data) {
