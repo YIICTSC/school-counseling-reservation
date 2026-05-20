@@ -253,6 +253,7 @@ export const AdminDashboard = () => {
   const [editingCounselor, setEditingCounselor] = useState<Omit<Counselor, 'id'> | null>(null);
   const [isAddingCounselor, setIsAddingCounselor] = useState(false);
   const [counselorFormError, setCounselorFormError] = useState<string | null>(null);
+  const [pendingLoginNoticeCount, setPendingLoginNoticeCount] = useState(0);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
     typeof Notification === 'undefined' ? 'default' : Notification.permission
   );
@@ -295,6 +296,9 @@ export const AdminDashboard = () => {
           .filter(apt => apt.status === 'pending')
           .forEach(showAppointmentNotification);
       } else {
+        const pendingAppointments = docs.filter(apt => apt.status === 'pending');
+        setPendingLoginNoticeCount(pendingAppointments.length);
+        showPendingAppointmentsNotification(pendingAppointments);
         hasLoadedInitialAppointments.current = true;
       }
 
@@ -340,6 +344,30 @@ export const AdminDashboard = () => {
     const notification = new Notification('新しい予約リクエストがあります', {
       body: `${appointment.parentName} / ${appointment.studentName}\n${formattedDate} ${appointment.startTime}-${appointment.endTime}`,
       tag: `appointment-${appointment.id}`,
+      requireInteraction: true,
+    });
+
+    notification.onclick = () => {
+      window.focus();
+      setActiveTab('appointments');
+      notification.close();
+    };
+  };
+
+  const showPendingAppointmentsNotification = (pendingAppointments: Appointment[]) => {
+    if (!isNotificationSupported || Notification.permission !== 'granted' || pendingAppointments.length === 0) return;
+
+    const previewAppointments = pendingAppointments.slice(0, 3);
+    const body = previewAppointments
+      .map(appointment => {
+        const formattedDate = format(new Date(appointment.date), 'MM/dd (E)', { locale: ja });
+        return `${appointment.parentName} / ${appointment.studentName} ${formattedDate} ${appointment.startTime}-${appointment.endTime}`;
+      })
+      .join('\n');
+    const remainingCount = pendingAppointments.length - previewAppointments.length;
+    const notification = new Notification(`${pendingAppointments.length}件の未確認予約があります`, {
+      body: remainingCount > 0 ? `${body}\nほか${remainingCount}件` : body,
+      tag: 'pending-appointments-on-login',
       requireInteraction: true,
     });
 
@@ -499,6 +527,43 @@ export const AdminDashboard = () => {
           )}
         </div>
       </div>
+
+      {pendingLoginNoticeCount > 0 && (
+        <div className="mb-6 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <Bell className="mt-0.5 h-5 w-5 text-yellow-600" />
+              <div>
+                <p className="text-sm font-medium text-yellow-900">
+                  未確認の予約リクエストが{pendingLoginNoticeCount}件あります
+                </p>
+                <p className="mt-1 text-sm text-yellow-800">
+                  内容を確認して、必要に応じて承認またはキャンセルしてください。
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('appointments');
+                  setPendingLoginNoticeCount(0);
+                }}
+                className="rounded-md bg-yellow-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-yellow-700"
+              >
+                予約を確認
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingLoginNoticeCount(0)}
+                className="rounded-md border border-yellow-300 bg-white px-3 py-1.5 text-sm font-medium text-yellow-800 hover:bg-yellow-100"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mb-6 border-b border-gray-200">
         <nav className="-mb-px flex space-x-8">
