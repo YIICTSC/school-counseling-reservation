@@ -6,12 +6,23 @@ import { ja } from 'date-fns/locale';
 import { CheckCircle } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
 
+interface TimeSlot {
+  start: string;
+  end: string;
+}
+
+interface WeeklyAvailability {
+  dayOfWeek: number;
+  timeSlots: TimeSlot[];
+}
+
 interface Counselor {
   id: string;
   name: string;
   type: 'counselor' | 'social_worker';
   description?: string;
   isActive: boolean;
+  weeklyAvailability?: WeeklyAvailability[];
 }
 
 export const BookAppointment = () => {
@@ -70,31 +81,45 @@ export const BookAppointment = () => {
     return <div className="text-center py-12 text-gray-500">読み込み中...</div>;
   }
 
+  const selectedCounselorData = counselors.find(c => c.id === selectedCounselor);
+  const hasCounselorAvailability = Boolean(selectedCounselorData?.weeklyAvailability?.length);
+  const parseTimeSlots = (timeSlotsStr: string): TimeSlot[] =>
+    timeSlotsStr.split(',').map(s => {
+      const [start, end] = s.trim().split('-');
+      return { start, end };
+    }).filter(t => t.start && t.end);
+
+  const getTimeSlotsForDate = (dateStr: string): TimeSlot[] => {
+    if (!dateStr) return [];
+
+    const targetDate = new Date(dateStr);
+    const exception = settings.exceptionalDates?.find(ex => ex.date === dateStr);
+
+    if (exception?.type === 'closed') return [];
+    if (exception?.type === 'open' && exception.timeSlotsStr) {
+      return parseTimeSlots(exception.timeSlotsStr);
+    }
+
+    if (hasCounselorAvailability) {
+      return selectedCounselorData?.weeklyAvailability?.find(day => day.dayOfWeek === targetDate.getDay())?.timeSlots || [];
+    }
+
+    return settings.allowedDaysOfWeek.includes(targetDate.getDay()) ? settings.timeSlots : [];
+  };
+
   // Generate available dates
   const today = startOfToday();
   const availableDates: string[] = [];
   for (let i = settings.bookingMinDaysAhead; i <= settings.bookingMaxDaysAhead; i++) {
     const d = addDays(today, i);
     const dateStr = format(d, 'yyyy-MM-dd');
-    const exception = settings.exceptionalDates?.find(ex => ex.date === dateStr);
-    
-    if (exception) {
-      if (exception.type === 'open') availableDates.push(dateStr);
-    } else {
-      if (settings.allowedDaysOfWeek.includes(d.getDay())) {
-        availableDates.push(dateStr);
-      }
+    if (getTimeSlotsForDate(dateStr).length > 0) {
+      availableDates.push(dateStr);
     }
   }
 
   // Get time slots for selected date
-  const exception = settings.exceptionalDates?.find(ex => ex.date === date);
-  const activeTimeSlots = exception?.type === 'open' && exception.timeSlotsStr
-    ? exception.timeSlotsStr.split(',').map(s => {
-        const [start, end] = s.trim().split('-');
-        return { start, end };
-      }).filter(t => t.start && t.end)
-    : settings.timeSlots;
+  const activeTimeSlots = getTimeSlotsForDate(date);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -280,7 +305,11 @@ export const BookAppointment = () => {
                 <select
                   required
                   value={selectedCounselor}
-                  onChange={(e) => setSelectedCounselor(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedCounselor(e.target.value);
+                    setDate('');
+                    setTimeSlot('');
+                  }}
                   className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
                 >
                   <option value="" disabled>選択してください</option>
