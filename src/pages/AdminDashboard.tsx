@@ -42,7 +42,10 @@ interface Counselor {
 
 const weekDays = ['日', '月', '火', '水', '木', '金', '土'];
 
-const createDefaultWeeklyAvailability = (allowedDaysOfWeek: number[], timeSlots: TimeSlot[]): WeeklyAvailability[] =>
+const createDefaultWeeklyAvailability = (
+  allowedDaysOfWeek: number[],
+  timeSlots: TimeSlot[],
+): WeeklyAvailability[] =>
   allowedDaysOfWeek.map(dayOfWeek => ({
     dayOfWeek,
     timeSlots: timeSlots.map(slot => ({ ...slot })),
@@ -86,7 +89,9 @@ const ScheduleEditor = ({
               <input
                 type="checkbox"
                 checked={enabled}
-                onChange={() => updateDay(dayOfWeek, current => enabled ? null : current)}
+                onChange={() => {
+                  updateDay(dayOfWeek, current => enabled ? null : current);
+                }}
                 className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
               />
               <span className="ml-2 text-sm font-medium text-gray-800">{dayLabel}曜日</span>
@@ -138,10 +143,12 @@ const ScheduleEditor = ({
                 ))}
                 <button
                   type="button"
-                  onClick={() => updateDay(dayOfWeek, current => ({
-                    ...current,
-                    timeSlots: [...current.timeSlots, { start: '09:00', end: '10:00' }],
-                  }))}
+                  onClick={() => {
+                    updateDay(dayOfWeek, current => ({
+                      ...current,
+                      timeSlots: [...current.timeSlots, { start: '09:00', end: '10:00' }],
+                    }));
+                  }}
                   className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800"
                 >
                   <Plus className="w-4 h-4 mr-1" />
@@ -165,22 +172,18 @@ export const AdminDashboard = () => {
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<string | null>(null);
   const [editingCounselorId, setEditingCounselorId] = useState<string | null>(null);
   const [editingCounselor, setEditingCounselor] = useState<Omit<Counselor, 'id'> | null>(null);
+  const [isAddingCounselor, setIsAddingCounselor] = useState(false);
+  const [counselorFormError, setCounselorFormError] = useState<string | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
     typeof Notification === 'undefined' ? 'default' : Notification.permission
   );
   const hasLoadedInitialAppointments = useRef(false);
 
+  // Settings State
   const { settings, loading: settingsLoading } = useSettings();
   const [formData, setFormData] = useState<SystemSettings>(settings);
   const [savingSettings, setSavingSettings] = useState(false);
   const [adminEmailsInput, setAdminEmailsInput] = useState('');
-  const [newCounselor, setNewCounselor] = useState({
-    name: '',
-    type: 'counselor' as 'counselor' | 'social_worker',
-    description: '',
-    isActive: true,
-    weeklyAvailability: createDefaultWeeklyAvailability(settings.allowedDaysOfWeek, settings.timeSlots),
-  });
 
   useEffect(() => {
     if (!settingsLoading) {
@@ -188,6 +191,15 @@ export const AdminDashboard = () => {
       setAdminEmailsInput(settings.adminEmails.join('\n'));
     }
   }, [settings, settingsLoading]);
+
+  // New Counselor State
+  const [newCounselor, setNewCounselor] = useState({
+    name: '',
+    type: 'counselor' as 'counselor' | 'social_worker',
+    description: '',
+    isActive: true,
+    weeklyAvailability: createDefaultWeeklyAvailability(settings.allowedDaysOfWeek, settings.timeSlots),
+  });
 
   useEffect(() => {
     const qAppointments = query(collection(db, 'appointments'));
@@ -206,6 +218,7 @@ export const AdminDashboard = () => {
         hasLoadedInitialAppointments.current = true;
       }
 
+      // Sort by date and time
       docs.sort((a, b) => {
         const dateCompare = b.date.localeCompare(a.date);
         if (dateCompare !== 0) return dateCompare;
@@ -235,6 +248,7 @@ export const AdminDashboard = () => {
 
   const handleEnableNotifications = async () => {
     if (!isNotificationSupported) return;
+
     const permission = await Notification.requestPermission();
     setNotificationPermission(permission);
   };
@@ -275,6 +289,9 @@ export const AdminDashboard = () => {
 
   const handleAddCounselor = async (e: React.FormEvent) => {
     e.preventDefault();
+    setCounselorFormError(null);
+    setIsAddingCounselor(true);
+
     try {
       await addDoc(collection(db, 'counselors'), {
         ...newCounselor,
@@ -288,7 +305,14 @@ export const AdminDashboard = () => {
         weeklyAvailability: createDefaultWeeklyAvailability(settings.allowedDaysOfWeek, settings.timeSlots),
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'counselors');
+      try {
+        handleFirestoreError(error, OperationType.CREATE, 'counselors');
+      } catch (loggedError) {
+        console.error(loggedError);
+      }
+      setCounselorFormError('担当者を追加できませんでした。管理者権限または入力内容を確認してください。');
+    } finally {
+      setIsAddingCounselor(false);
     }
   };
 
@@ -396,21 +420,33 @@ export const AdminDashboard = () => {
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('appointments')}
-            className={`${activeTab === 'appointments' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+            className={`${
+              activeTab === 'appointments'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
           >
             <Calendar className="w-4 h-4 mr-2" />
             予約管理
           </button>
           <button
             onClick={() => setActiveTab('counselors')}
-            className={`${activeTab === 'counselors' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+            className={`${
+              activeTab === 'counselors'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
           >
             <Users className="w-4 h-4 mr-2" />
             担当者管理
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`${activeTab === 'settings' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+            className={`${
+              activeTab === 'settings'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
           >
             <Settings className="w-4 h-4 mr-2" />
             システム設定
@@ -550,13 +586,19 @@ export const AdminDashboard = () => {
                   onChange={weeklyAvailability => setNewCounselor({ ...newCounselor, weeklyAvailability })}
                 />
               </div>
+              {counselorFormError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {counselorFormError}
+                </div>
+              )}
               <div className="flex justify-end">
                 <button
                   type="submit"
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  disabled={isAddingCounselor}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  追加する
+                  {isAddingCounselor ? '追加中...' : '追加する'}
                 </button>
               </div>
             </form>
@@ -711,6 +753,7 @@ export const AdminDashboard = () => {
             </div>
 
             <div className="space-y-8">
+              {/* サイト設定 */}
               <section>
                 <h3 className="text-md font-medium text-gray-900 mb-4 border-b pb-2">サイト設定</h3>
                 <div className="space-y-4">
@@ -752,6 +795,7 @@ export const AdminDashboard = () => {
                 </div>
               </section>
 
+              {/* 予約ルール */}
               <section>
                 <h3 className="text-md font-medium text-gray-900 mb-4 border-b pb-2">予約ルール</h3>
                 <div className="space-y-4">
@@ -787,7 +831,7 @@ export const AdminDashboard = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">予約可能曜日</label>
                     <div className="flex flex-wrap gap-4">
-                      {weekDays.map((day, index) => (
+                      {['日', '月', '火', '水', '木', '金', '土'].map((day, index) => (
                         <label key={index} className="inline-flex items-center">
                           <input
                             type="checkbox"
@@ -821,6 +865,7 @@ export const AdminDashboard = () => {
                 </div>
               </section>
 
+              {/* 時間枠設定 */}
               <section>
                 <h3 className="text-md font-medium text-gray-900 mb-4 border-b pb-2">基本時間枠</h3>
                 <div className="space-y-3">
@@ -868,6 +913,7 @@ export const AdminDashboard = () => {
                 </div>
               </section>
 
+              {/* 例外日程 */}
               <section>
                 <h3 className="text-md font-medium text-gray-900 mb-4 border-b pb-2">例外的な詳細日時設定</h3>
                 <p className="text-xs text-gray-500 mb-4">祝日の休業や、特定の日の特別営業（時間枠の変更）を設定できます。</p>
@@ -934,6 +980,7 @@ export const AdminDashboard = () => {
                   </button>
                 </div>
               </section>
+
             </div>
           </div>
         </div>

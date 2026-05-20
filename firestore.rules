@@ -27,8 +27,14 @@ service cloud.firestore {
              request.auth.token.email_verified == true;
     }
 
+    function isProfileAdmin() {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
     function isAdmin() {
-      return isConfiguredAdmin() || isBootstrapAdmin();
+      return isConfiguredAdmin() || isBootstrapAdmin() || isProfileAdmin();
     }
 
     function hasOnlyAllowedFields(allowedFields) {
