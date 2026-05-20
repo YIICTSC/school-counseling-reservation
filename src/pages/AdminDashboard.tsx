@@ -607,11 +607,11 @@ export const AdminDashboard = () => {
         <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
           <ul className="divide-y divide-gray-200">
             {appointments.map((apt) => (
-              <li key={apt.id} className="p-6 hover:bg-gray-50 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-3">
+              <li key={apt.id} className="p-4 hover:bg-gray-50 transition-colors sm:p-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         <span className="text-sm font-medium text-gray-900">
                           {format(new Date(apt.date), 'yyyy年MM月dd日 (E)', { locale: ja })}
                         </span>
@@ -620,11 +620,11 @@ export const AdminDashboard = () => {
                         </span>
                         {getStatusBadge(apt.status)}
                       </div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-xs text-gray-500 sm:text-sm">
                         申込日: {format(new Date(apt.createdAt), 'yyyy/MM/dd HH:mm')}
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 mt-4">
+                    <div className="grid grid-cols-1 gap-4 mt-4 sm:grid-cols-2">
                       <div>
                         <p className="text-sm text-gray-500">担当者</p>
                         <p className="text-sm font-medium text-gray-900">{getCounselorName(apt.counselorId)}</p>
@@ -643,19 +643,19 @@ export const AdminDashboard = () => {
                     </div>
                   </div>
                   
-                  <div className="ml-6 flex items-center space-x-3 border-l pl-6 border-gray-200">
+                  <div className="flex w-full flex-col gap-2 border-t pt-4 border-gray-200 sm:flex-row sm:flex-wrap lg:ml-6 lg:w-auto lg:items-center lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
                     {deletingAppointmentId === apt.id ? (
-                      <div className="flex items-center space-x-2 bg-red-50 p-2 rounded-lg border border-red-100">
-                        <span className="text-xs text-red-600 font-bold">本当に削除しますか？</span>
-                        <button onClick={() => handleDeleteAppointment(apt.id)} className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded transition">はい</button>
-                        <button onClick={() => setDeletingAppointmentId(null)} className="text-xs bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded transition">キャンセル</button>
+                      <div className="grid w-full grid-cols-2 gap-2 bg-red-50 p-2 rounded-lg border border-red-100 sm:flex sm:w-auto sm:items-center">
+                        <span className="col-span-2 text-xs text-red-600 font-bold sm:col-auto">本当に削除しますか？</span>
+                        <button onClick={() => handleDeleteAppointment(apt.id)} className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition sm:py-1.5">はい</button>
+                        <button onClick={() => setDeletingAppointmentId(null)} className="text-xs bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-3 py-2 rounded transition sm:py-1.5">キャンセル</button>
                       </div>
                     ) : (
                       <>
                         {apt.status === 'pending' && (
                           <button
                             onClick={() => handleUpdateStatus(apt.id, 'confirmed')}
-                            className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+                            className="inline-flex w-full items-center justify-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 sm:w-auto"
                           >
                             <CheckCircle className="w-4 h-4 mr-1" />
                             承認
@@ -664,7 +664,7 @@ export const AdminDashboard = () => {
                         {apt.status !== 'cancelled' && (
                           <button
                             onClick={() => handleUpdateStatus(apt.id, 'cancelled')}
-                            className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            className="inline-flex w-full items-center justify-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:w-auto"
                           >
                             <XCircle className="w-4 h-4 mr-1" />
                             却下
@@ -672,7 +672,7 @@ export const AdminDashboard = () => {
                         )}
                         <button
                           onClick={() => setDeletingAppointmentId(apt.id)}
-                          className="inline-flex items-center px-3 py-2 border border-red-200 text-sm leading-4 font-medium rounded-md text-red-600 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                          className="inline-flex w-full items-center justify-center px-3 py-2 border border-red-200 text-sm leading-4 font-medium rounded-md text-red-600 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:w-auto"
                         >
                           削除
                         </button>
