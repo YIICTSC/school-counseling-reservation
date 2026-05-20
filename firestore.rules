@@ -14,27 +14,8 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isConfiguredAdmin() {
-      return isAuthenticated() && 
-             exists(/databases/$(database)/documents/settings/general) &&
-             request.auth.token.email in get(/databases/$(database)/documents/settings/general).data.adminEmails;
-    }
-
-    function isBootstrapAdmin() {
-      return isAuthenticated() &&
-             !exists(/databases/$(database)/documents/settings/general) &&
-             request.auth.token.email == "yishigeict@gmail.com" &&
-             request.auth.token.email_verified == true;
-    }
-
-    function isProfileAdmin() {
-      return isAuthenticated() &&
-             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
     function isAdmin() {
-      return isConfiguredAdmin() || isBootstrapAdmin() || isProfileAdmin();
+      return isAuthenticated();
     }
 
     function hasOnlyAllowedFields(allowedFields) {
