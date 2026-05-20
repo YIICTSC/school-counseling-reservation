@@ -4,7 +4,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Bell, Calendar, Users, CheckCircle, XCircle, Trash2, Plus, Settings, Save, X } from 'lucide-react';
-import { useSettings, SystemSettings, ExceptionalDate } from '../hooks/useSettings';
+import { useSettings, SystemSettings } from '../hooks/useSettings';
 
 interface Appointment {
   id: string;
@@ -12,7 +12,6 @@ interface Appointment {
   parentId: string;
   parentName: string;
   studentName: string;
-  parentEmail?: string;
   phoneNumber?: string;
   date: string;
   startTime: string;
@@ -42,11 +41,17 @@ export const AdminDashboard = () => {
   );
   const hasLoadedInitialAppointments = useRef(false);
 
-  // Settings State
   const { settings, loading: settingsLoading } = useSettings();
   const [formData, setFormData] = useState<SystemSettings>(settings);
   const [savingSettings, setSavingSettings] = useState(false);
   const [adminEmailsInput, setAdminEmailsInput] = useState('');
+
+  const [newCounselor, setNewCounselor] = useState({
+    name: '',
+    type: 'counselor' as 'counselor' | 'social_worker',
+    description: '',
+    isActive: true
+  });
 
   useEffect(() => {
     if (!settingsLoading) {
@@ -54,14 +59,6 @@ export const AdminDashboard = () => {
       setAdminEmailsInput(settings.adminEmails.join('\n'));
     }
   }, [settings, settingsLoading]);
-
-  // New Counselor State
-  const [newCounselor, setNewCounselor] = useState({
-    name: '',
-    type: 'counselor' as 'counselor' | 'social_worker',
-    description: '',
-    isActive: true
-  });
 
   useEffect(() => {
     const qAppointments = query(collection(db, 'appointments'));
@@ -80,7 +77,6 @@ export const AdminDashboard = () => {
         hasLoadedInitialAppointments.current = true;
       }
 
-      // Sort by date and time
       docs.sort((a, b) => {
         const dateCompare = b.date.localeCompare(a.date);
         if (dateCompare !== 0) return dateCompare;
@@ -110,7 +106,6 @@ export const AdminDashboard = () => {
 
   const handleEnableNotifications = async () => {
     if (!isNotificationSupported) return;
-
     const permission = await Notification.requestPermission();
     setNotificationPermission(permission);
   };
@@ -132,40 +127,9 @@ export const AdminDashboard = () => {
     };
   };
 
-  const sendApprovalEmail = async (appointment: Appointment) => {
-    const formattedDate = format(new Date(appointment.date), 'yyyy年MM月dd日 (E)', { locale: ja });
-    const counselorName = getCounselorName(appointment.counselorId);
-    const subject = `面談予約が承認されました: ${formattedDate} ${appointment.startTime}-${appointment.endTime}`;
-    const text = `${appointment.parentName} 様
-
-面談予約が承認されました。
-
-対象児童・生徒: ${appointment.studentName}
-担当者: ${counselorName}
-日時: ${formattedDate} ${appointment.startTime}-${appointment.endTime}
-
-当日は予約時間にお越しください。
-`;
-
-    await addDoc(collection(db, 'mail'), {
-      to: [appointment.parentEmail],
-      message: {
-        subject,
-        text,
-        html: text.replace(/\n/g, '<br />'),
-      },
-      appointmentId: appointment.id,
-      createdAt: new Date().toISOString(),
-    });
-  };
-
   const handleUpdateStatus = async (id: string, newStatus: 'confirmed' | 'cancelled') => {
     try {
       await updateDoc(doc(db, 'appointments', id), { status: newStatus });
-      const appointment = appointments.find(apt => apt.id === id);
-      if (newStatus === 'confirmed' && appointment?.parentEmail) {
-        await sendApprovalEmail(appointment);
-      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `appointments/${id}`);
     }
@@ -259,33 +223,21 @@ export const AdminDashboard = () => {
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('appointments')}
-            className={`${
-              activeTab === 'appointments'
-                ? 'border-indigo-500 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+            className={`${activeTab === 'appointments' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
           >
             <Calendar className="w-4 h-4 mr-2" />
             予約管理
           </button>
           <button
             onClick={() => setActiveTab('counselors')}
-            className={`${
-              activeTab === 'counselors'
-                ? 'border-indigo-500 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+            className={`${activeTab === 'counselors' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
           >
             <Users className="w-4 h-4 mr-2" />
             担当者管理
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`${
-              activeTab === 'settings'
-                ? 'border-indigo-500 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+            className={`${activeTab === 'settings' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
           >
             <Settings className="w-4 h-4 mr-2" />
             システム設定
@@ -322,7 +274,6 @@ export const AdminDashboard = () => {
                       <div>
                         <p className="text-sm text-gray-500">保護者氏名 / 対象児童・生徒</p>
                         <p className="text-sm font-medium text-gray-900">{apt.parentName} / {apt.studentName}</p>
-                        {apt.parentEmail && <p className="text-sm text-gray-500 mt-1">✉ {apt.parentEmail}</p>}
                         {apt.phoneNumber && <p className="text-sm text-gray-500 mt-1">📞 {apt.phoneNumber}</p>}
                       </div>
                       {apt.notes && (
@@ -491,7 +442,6 @@ export const AdminDashboard = () => {
             </div>
 
             <div className="space-y-8">
-              {/* サイト設定 */}
               <section>
                 <h3 className="text-md font-medium text-gray-900 mb-4 border-b pb-2">サイト設定</h3>
                 <div className="space-y-4">
@@ -527,7 +477,6 @@ export const AdminDashboard = () => {
                 </div>
               </section>
 
-              {/* 予約ルール */}
               <section>
                 <h3 className="text-md font-medium text-gray-900 mb-4 border-b pb-2">予約ルール</h3>
                 <div className="space-y-4">
@@ -597,7 +546,6 @@ export const AdminDashboard = () => {
                 </div>
               </section>
 
-              {/* 時間枠設定 */}
               <section>
                 <h3 className="text-md font-medium text-gray-900 mb-4 border-b pb-2">基本時間枠</h3>
                 <div className="space-y-3">
@@ -645,7 +593,6 @@ export const AdminDashboard = () => {
                 </div>
               </section>
 
-              {/* 例外日程 */}
               <section>
                 <h3 className="text-md font-medium text-gray-900 mb-4 border-b pb-2">例外的な詳細日時設定</h3>
                 <p className="text-xs text-gray-500 mb-4">祝日の休業や、特定の日の特別営業（時間枠の変更）を設定できます。</p>
@@ -712,7 +659,6 @@ export const AdminDashboard = () => {
                   </button>
                 </div>
               </section>
-
             </div>
           </div>
         </div>
