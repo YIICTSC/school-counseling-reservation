@@ -14,6 +14,10 @@ const ProtectedRoute = ({ children, requireAdmin = false }: { children: React.Re
   }
 
   if (!user || !profile) {
+    if (requireAdmin) {
+      return <Login />;
+    }
+
     return <Navigate to="/login" replace />;
   }
 

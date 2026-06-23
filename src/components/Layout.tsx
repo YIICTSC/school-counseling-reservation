@@ -1,7 +1,7 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { logOut } from '../firebase';
-import { Users, LogOut, User, LogIn } from 'lucide-react';
+import { Users, LogOut, User } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
 
 export const Layout = () => {
@@ -48,7 +48,7 @@ export const Layout = () => {
               </nav>
             </div>
             <div className="flex items-center">
-              {user ? (
+              {user && (
                 <>
                   <div className="flex items-center text-sm text-gray-500 mr-4">
                     <User className="w-4 h-4 mr-1" />
@@ -62,14 +62,6 @@ export const Layout = () => {
                     ログアウト
                   </button>
                 </>
-              ) : (
-                <Link
-                  to="/login"
-                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none transition"
-                >
-                  <LogIn className="w-4 h-4 mr-1" />
-                  管理者ログイン
-                </Link>
               )}
             </div>
           </div>
