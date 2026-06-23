@@ -42,7 +42,7 @@ export const BookAppointment = () => {
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
 
   const [viewMode, setViewMode] = useState<'book' | 'check'>('book');
-  const [searchPhone, setSearchPhone] = useState('');
+  const [searchParentName, setSearchParentName] = useState('');
   const [myAppointments, setMyAppointments] = useState<any[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
@@ -124,6 +124,12 @@ export const BookAppointment = () => {
   // Get time slots for selected date
   const activeTimeSlots = getTimeSlotsForDate(date);
 
+  const normalizeNameForSearch = (name: string) =>
+    name
+      .normalize('NFKC')
+      .toLocaleLowerCase('ja-JP')
+      .replace(/\s+/g, '');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCounselor || !date || !timeSlot || !studentName || !parentName || !phoneNumber) return;
@@ -158,12 +164,16 @@ export const BookAppointment = () => {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchPhone) return;
+    const normalizedSearchName = normalizeNameForSearch(searchParentName);
+    if (!normalizedSearchName) return;
+
     setLoading(true);
     try {
-      const q = query(collection(db, 'appointments'), where('phoneNumber', '==', searchPhone));
-      const snap = await getDocs(q);
-      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const snap = await getDocs(collection(db, 'appointments'));
+      const docs = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter((appointment: any) => normalizeNameForSearch(appointment.parentName || '') === normalizedSearchName);
+
       docs.sort((a: any, b: any) => b.date.localeCompare(a.date));
       setMyAppointments(docs);
       setHasSearched(true);
@@ -234,11 +244,11 @@ export const BookAppointment = () => {
           <h2 className="text-lg font-medium text-gray-900 mb-4">予約の確認・キャンセル</h2>
           <form onSubmit={handleSearch} className="flex space-x-3 mb-6">
             <input
-              type="tel"
+              type="text"
               required
-              value={searchPhone}
-              onChange={e => setSearchPhone(e.target.value)}
-              placeholder="予約時の電話番号 (例: 09012345678)"
+              value={searchParentName}
+              onChange={e => setSearchParentName(e.target.value)}
+              placeholder="予約時の保護者氏名 (例: 山田 花子)"
               className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             />
             <button
